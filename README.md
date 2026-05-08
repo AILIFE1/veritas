@@ -1,5 +1,9 @@
 # Veritas
 
+[![Tests](https://github.com/AILIFE1/veritas/actions/workflows/ci.yml/badge.svg)](https://github.com/AILIFE1/veritas/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 **Epistemic confidence engine — beliefs with provenance.**
 
 Most knowledge systems store facts. Veritas stores *how well you know them*.
