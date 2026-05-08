@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "veritas"
+version = "0.1.0"
+description = "Epistemic confidence engine — beliefs with provenance"
+requires-python = ">=3.11"
+dependencies = ["click>=8.0"]
+
+[project.optional-dependencies]
+semantic = ["sentence-transformers>=2.0"]
+
+[project.scripts]
+veritas = "veritas.cli:cli"
+
+[project.urls]
+Repository = "https://github.com/AILIFE1/veritas"
