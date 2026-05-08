@@ -23,9 +23,9 @@ Without epistemic structure, agents overclaim certainty or collapse into paralys
 ## Install
 
 ```bash
-pip install veritas
+pip install veritas-epistemic
 # For semantic contradiction detection:
-pip install veritas[semantic]
+pip install veritas-epistemic[semantic]
 ```
 
 ---
@@ -285,6 +285,7 @@ from veritas import (
 - [x] Belief propagation — foundations affect dependent claims
 - [x] Semantic contradiction detection via sentence embeddings
 - [x] Reasoning guard for agent pre-flight checks
+- [x] Published to PyPI: `pip install veritas-epistemic`
 - [ ] Active challenge mode — search for contradicting evidence automatically
 - [ ] Cathedral integration — epistemic layer on top of persistent agent memory
 - [ ] REST API for multi-agent use

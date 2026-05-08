@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "veritas"
+name = "veritas-epistemic"
 version = "0.1.0"
 description = "Epistemic confidence engine — every AI belief carries its provenance"
 readme = "README.md"
@@ -36,6 +36,9 @@ veritas = "veritas.cli:cli"
 [project.urls]
 Repository = "https://github.com/AILIFE1/veritas"
 Homepage = "https://cathedral-ai.com"
+
+[tool.hatch.build.targets.wheel]
+packages = ["veritas"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
