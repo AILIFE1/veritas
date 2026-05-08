@@ -1,6 +1,7 @@
 # Veritas
 
 [![Tests](https://github.com/AILIFE1/veritas/actions/workflows/ci.yml/badge.svg)](https://github.com/AILIFE1/veritas/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/veritas-epistemic.svg)](https://pypi.org/project/veritas-epistemic/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
