@@ -196,21 +196,65 @@ Triggers: low confidence · single source · high fragility · staleness · cont
 
 ---
 
+### Epistemic fingerprint
+
+Every belief system has a characteristic reasoning style. The fingerprint measures it.
+
+```bash
+veritas fingerprint --context cathedral
+```
+
+```
+  Epistemic Fingerprint: cathedral
+  ========================================================
+  Claims: 12   Sources: 31   Avg sources/claim: 2.6
+
+  Source composition:
+    EMPIRICAL      [################........] 65%
+    AUTHORITY      [########................] 32%
+    ANECDOTAL      [##......................] 8%
+
+  Confidence profile:
+    Average        [##################......] 0.87
+    Fragility      [####....................] 0.18
+    Overconfident  [##......................] 8% of claims
+    Single-source  [######..................] 25% of claims
+
+  Epistemic health:
+    Contradicted   [####....................] 17% of claims
+    Rigor score    [################........] 0.68
+    Calibration    [####################....] 0.84
+    Overall        [##################......] 0.76
+```
+
+Compare two contexts side by side:
+
+```bash
+veritas compare cathedral philosophy
+```
+
+Two agents with the same beliefs but different fingerprints are different kinds of reasoners.
+
+---
+
 ## Full command reference
 
 ```
-veritas add       STATEMENT [--source ...] [--weight] [--date YYYY-MM-DD] [--context]
-veritas source    CLAIM_REF --citation ... [--weight] [--stance] [--date]
-veritas depends   CLAIM_REF --on CLAIM_REF [--inference DEDUCTIVE|INDUCTIVE|ABDUCTIVE]
-veritas trace     CLAIM_REF          full provenance breakdown
-veritas chain     CLAIM_REF          dependency tree with live confidence at each level
-veritas check     CLAIM_TEXT         reasoning guard verdict
-veritas challenge CLAIM_REF          find contradicting claims
-veritas query     [--fragile] [--low] [--unsourced] [--context]
-veritas weakest   [--limit]          most fragile beliefs
-veritas stale     [--threshold]      claims losing confidence to age
-veritas report                       overall epistemic health
-veritas delete    CLAIM_REF
+veritas add         STATEMENT [--source ...] [--weight] [--date YYYY-MM-DD] [--context]
+veritas source      CLAIM_REF --citation ... [--weight] [--stance] [--date]
+veritas depends     CLAIM_REF --on CLAIM_REF [--inference DEDUCTIVE|INDUCTIVE|ABDUCTIVE]
+veritas trace       CLAIM_REF          full provenance breakdown
+veritas chain       CLAIM_REF          dependency tree with live confidence at each level
+veritas check       CLAIM_TEXT         reasoning guard verdict
+veritas challenge   CLAIM_REF          find contradicting claims
+veritas fingerprint [--context]        epistemic style of a belief system
+veritas compare     CONTEXT_A CONTEXT_B  side-by-side fingerprint diff
+veritas query       [--fragile] [--low] [--unsourced] [--context]
+veritas weakest     [--limit]          most fragile beliefs
+veritas stale       [--threshold]      claims losing confidence to age
+veritas report                         overall epistemic health
+veritas demo                           live walkthrough of all capabilities
+veritas delete      CLAIM_REF
 ```
 
 ---

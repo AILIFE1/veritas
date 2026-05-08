@@ -2,6 +2,7 @@ from .models import Claim, Source, Stance, SourceType, ConfidenceVector, Provena
 from .engine import calculate_confidence, propagate, find_contradictions
 from .db import VeritasDB
 from .guard import ReasoningGuard, GuardResult
+from .fingerprint import compute as compute_fingerprint, compare as compare_fingerprints, EpistemicFingerprint
 
 __all__ = [
     "Claim", "Source", "Stance", "SourceType", "ConfidenceVector",
@@ -9,4 +10,5 @@ __all__ = [
     "calculate_confidence", "propagate", "find_contradictions",
     "VeritasDB",
     "ReasoningGuard", "GuardResult",
+    "EpistemicFingerprint", "compute_fingerprint", "compare_fingerprints",
 ]

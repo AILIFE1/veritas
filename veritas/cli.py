@@ -441,6 +441,188 @@ def stale(ctx, threshold, context, limit):
     click.echo()
 
 
+# ── fingerprint ──────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--context", "-c", default=None, help="Context to fingerprint (default: all)")
+@click.pass_context
+def fingerprint(ctx, context):
+    """Show the epistemic fingerprint of a belief system.
+
+    Reveals the characteristic reasoning style: what evidence it relies on,
+    how fragile its beliefs are, how fresh its sources are, whether it
+    acknowledges contradictions.
+    """
+    from .fingerprint import compute
+    db = _db(ctx)
+    fp = compute(db, context=context)
+    if fp.total_claims == 0:
+        click.echo("  No claims found.")
+        return
+    click.echo(str(fp))
+
+
+@cli.command("compare")
+@click.argument("context_a")
+@click.argument("context_b")
+@click.pass_context
+def compare_contexts(ctx, context_a, context_b):
+    """Compare the epistemic fingerprints of two contexts side by side."""
+    from .fingerprint import compute, compare
+    db = _db(ctx)
+    fp_a = compute(db, context=context_a)
+    fp_b = compute(db, context=context_b)
+    click.echo()
+    click.echo(compare(fp_a, fp_b))
+
+
+# ── demo ─────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--db", "demo_db", default=None, help="Database path (default: temp file)")
+@click.pass_context
+def demo(ctx, demo_db):
+    """Run a live demonstration of all Veritas capabilities.
+
+    Builds a belief network from scratch, shows confidence propagation,
+    temporal decay, semantic contradictions, the reasoning guard, and
+    an epistemic fingerprint. Takes about 10 seconds.
+    """
+    import os, tempfile, warnings
+    warnings.filterwarnings("ignore")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+    from datetime import datetime
+    from .fingerprint import compute
+    from .guard import ReasoningGuard
+
+    db_path = demo_db or os.path.join(tempfile.gettempdir(), "veritas_demo.db")
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+    db = VeritasDB(db_path)
+
+    def src(citation, weight, stype=SourceType.EMPIRICAL, year=2024, stance=Stance.SUPPORTS):
+        return Source(citation=citation, weight=weight, stance=stance,
+                      source_type=stype, source_date=datetime(year, 1, 1))
+
+    click.echo()
+    click.echo("  Veritas live demo")
+    click.echo("  " + "=" * 50)
+
+    # ── 1. Build a belief chain ───────────────────────────────────────────────
+    click.echo()
+    click.echo("  1. Building a 3-level belief chain...")
+
+    c_base = Claim(
+        statement="AI agents lose all memory between sessions by default",
+        context="demo",
+        sources=[
+            src("OpenAI API documentation 2024", 0.95, SourceType.AUTHORITY, 2024),
+            src("Empirical testing across 5 frameworks 2024", 0.88, year=2024),
+        ]
+    )
+    c_mid = Claim(
+        statement="Developers need persistent memory to build reliable agents",
+        context="demo",
+        sources=[
+            src("Developer survey Colony 2026", 0.65, SourceType.ANECDOTAL, 2026),
+        ]
+    )
+    c_top = Claim(
+        statement="Cathedral solves a real problem in the agent ecosystem",
+        context="demo",
+        sources=[
+            src("Benchmark: 10.8x stability improvement vs stateless", 0.85, year=2026),
+        ]
+    )
+
+    db.add_claim(c_base)
+    db.add_claim(c_mid)
+    db.add_claim(c_top)
+    db.link_claims(c_mid.id, c_base.id)
+    db.link_claims(c_top.id, c_mid.id)
+
+    all_by_id = db.all_claims_by_id()
+    from .engine import propagate as _prop
+    cv_top = _prop(db.get_claim(c_top.id), all_by_id)
+    click.echo(f"     Top claim confidence: {cv_top.value:.2f}  (chain intact)")
+
+    # ── 2. Shake the foundation ───────────────────────────────────────────────
+    click.echo()
+    click.echo("  2. Adding contradicting evidence to the foundation...")
+
+    db.add_source(c_base.id, src(
+        "Some LLMs now offer built-in session memory (GPT-5 memory feature)",
+        weight=0.70, stype=SourceType.AUTHORITY, year=2025, stance=Stance.CONTRADICTS
+    ))
+
+    all_by_id = db.all_claims_by_id()
+    cv_base_new = _prop(db.get_claim(c_base.id), all_by_id)
+    cv_top_new  = _prop(db.get_claim(c_top.id),  all_by_id)
+    click.echo(f"     Foundation confidence: {cv_base_new.value:.2f}  (was ~0.95)")
+    click.echo(f"     Top claim confidence:  {cv_top_new.value:.2f}  (propagated down, unchanged sources)")
+
+    # ── 3. Old source decaying ────────────────────────────────────────────────
+    click.echo()
+    click.echo("  3. Temporal decay on an old claim...")
+
+    old = Claim(
+        statement="Symbolic AI is the dominant paradigm for machine reasoning",
+        context="demo",
+        sources=[
+            src("Minsky 1975 — frames and knowledge representation", 0.9,
+                SourceType.AUTHORITY, 1975),
+        ]
+    )
+    db.add_claim(old)
+    cv_old = calculate_confidence(db.get_claim(old.id).sources)
+    click.echo(f"     Confidence: {cv_old.value:.2f}  (lost {cv_old.staleness_penalty:.2f} to age — 50yr authority source)")
+
+    # ── 4. Semantic contradiction ─────────────────────────────────────────────
+    click.echo()
+    click.echo("  4. Semantic contradiction detection (no shared words)...")
+
+    ca = Claim(
+        statement="Regular exercise strengthens the human cardiovascular system",
+        context="demo",
+        sources=[src("WHO Global Health Report 2023", 0.95, year=2023)]
+    )
+    cb = Claim(
+        statement="Physical activity has no proven benefit for heart health",
+        context="demo",
+        sources=[src("Fringe wellness blog 2021", 0.2, SourceType.ANECDOTAL, year=2021)]
+    )
+    db.add_claim(ca)
+    db.add_claim(cb)
+    contras = find_contradictions(db.get_claim(ca.id), db.all_claims(), db=db)
+    found = any(c.id == cb.id for c in contras)
+    click.echo(f"     Contradiction caught: {found}  (zero content words in common)")
+
+    # ── 5. Reasoning guard ────────────────────────────────────────────────────
+    click.echo()
+    click.echo("  5. Reasoning guard checks...")
+
+    guard = ReasoningGuard(db)
+    for label, text in [
+        ("well-sourced", "Cathedral solves a real problem"),
+        ("stale",        "Symbolic AI is the dominant paradigm"),
+    ]:
+        result = guard.check(text)
+        click.echo(f"     [{result.verdict:<7}] {label}: {result.reason}")
+        for flag in result.flags:
+            click.echo(f"              {flag}")
+
+    # ── 6. Fingerprint ────────────────────────────────────────────────────────
+    click.echo()
+    click.echo("  6. Epistemic fingerprint of this belief system:")
+    fp = compute(db, context="demo")
+    click.echo(str(fp))
+
+    if not demo_db:
+        os.remove(db_path)
+
+
 # ── delete ───────────────────────────────────────────────────────────────────
 
 @cli.command()
