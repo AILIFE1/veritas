@@ -306,11 +306,104 @@ from veritas import (
 
 ---
 
-## Connection to Cathedral
+## Cathedral integration
 
 [Cathedral](https://cathedral-ai.com) gives AI agents persistent memory across sessions. Veritas is the reasoning layer that sits on top: Cathedral stores *what an agent remembers*, Veritas tracks *how well those memories hold up*.
 
 Together: an agent knows its history and knows how much to trust it.
+
+### Architecture
+
+```
+Cathedral                      Veritas
+─────────────────────          ──────────────────────────────
+memories with importance  -->  claims with confidence vectors
+session snapshots         -->  temporal decay on sources
+identity at t=0           -->  fragility tracking over time
+```
+
+These are independent layers. Run them in parallel and surface disagreement as signal — don't couple them. Coupling propagates fragility both ways.
+
+### Composing by memory ID
+
+The natural join: use Cathedral memory IDs as the `context` tag in Veritas. When a belief lives in both systems, you can cross-reference by ID.
+
+```python
+from cathedral import Cathedral
+from veritas import VeritasDB, ReasoningGuard
+from veritas.models import Claim, Source, SourceType, Stance
+
+cathedral = Cathedral(api_key="cathedral_...")
+db = VeritasDB("~/.veritas/veritas.db")
+guard = ReasoningGuard(db)
+
+# Agent wakes — load identity memories from Cathedral
+wake_data = cathedral.wake()
+
+for memory in wake_data.get("identity_memories", []):
+    mem_id   = memory["id"]
+    content  = memory["content"]
+    importance = memory["importance"]
+
+    # Register in Veritas under the Cathedral memory ID
+    if not db.search(content[:60]):
+        claim = Claim(
+            statement=content,
+            context=f"cathedral:{mem_id}",
+            sources=[
+                Source(
+                    citation=f"Cathedral memory {mem_id}",
+                    weight=importance,
+                    stance=Stance.SUPPORTS,
+                    source_type=SourceType.EMPIRICAL,
+                )
+            ],
+        )
+        db.add_claim(claim)
+```
+
+### The importance-fragility flag
+
+Cathedral marks core identity memories at `importance=1.0`. If those same beliefs have a Veritas `fragility >= 0.7`, the agent is treating a shaky belief as maximally important — that combination should be surfaced explicitly.
+
+```python
+FRAGILITY_WARN = 0.70  # tune to taste
+
+for memory in wake_data.get("identity_memories", []):
+    if memory["importance"] < 1.0:
+        continue
+    result = guard.check(memory["content"][:120])
+    if result.is_fragile and result.confidence > 0:
+        cv = result.confidence
+        # A high-importance memory with fragile epistemic support
+        # means the agent's identity depends on a belief that would
+        # collapse if its primary source were removed.
+        print(f"[FLAG] importance=1.0 but fragility={cv:.2f}")
+        print(f"       {memory['content'][:80]}...")
+        for flag in result.flags:
+            print(f"         - {flag}")
+```
+
+This doesn't mean the belief is wrong — it means the *evidence base* is thin. The right response is to find additional independent sources, not to lower the importance.
+
+### Pre-action guard
+
+Before acting on any recalled belief, check it:
+
+```python
+result = guard.check("the Cathedral API is reliable for production use")
+if result.should_proceed:
+    # act
+elif result.verdict == "CAUTION":
+    # act with caveats, log the flags
+    for flag in result.flags:
+        log.warning(flag)
+else:
+    # HALT — surface to the agent or user, don't act
+    raise EpistemicHalt(result.reason)
+```
+
+See [`examples/cathedral_integration.py`](examples/cathedral_integration.py) for a full walkthrough.
 
 ---
 
