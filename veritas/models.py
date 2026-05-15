@@ -113,3 +113,4 @@ class Claim:
     sources: list[Source] = field(default_factory=list)
     depends_on: list[ProvenanceLink] = field(default_factory=list)
     confidence: Optional[ConfidenceVector] = None         # computed by engine, not stored
+    probe_id: Optional[str] = None                        # registered probe callable ID

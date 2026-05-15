@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS claims (
     id       TEXT PRIMARY KEY,
     statement TEXT NOT NULL,
     context  TEXT,
-    added_at TEXT NOT NULL
+    added_at TEXT NOT NULL,
+    probe_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sources (
@@ -56,9 +57,12 @@ class VeritasDB:
             self._migrate(conn)
 
     def _migrate(self, conn):
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(sources)").fetchall()}
-        if "source_date" not in cols:
+        source_cols = {r[1] for r in conn.execute("PRAGMA table_info(sources)").fetchall()}
+        if "source_date" not in source_cols:
             conn.execute("ALTER TABLE sources ADD COLUMN source_date TEXT")
+        claim_cols = {r[1] for r in conn.execute("PRAGMA table_info(claims)").fetchall()}
+        if "probe_id" not in claim_cols:
+            conn.execute("ALTER TABLE claims ADD COLUMN probe_id TEXT")
 
     @contextmanager
     def _conn(self):
@@ -74,8 +78,8 @@ class VeritasDB:
     def add_claim(self, claim: Claim) -> Claim:
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO claims (id, statement, context, added_at) VALUES (?,?,?,?)",
-                (claim.id, claim.statement, claim.context, claim.added_at.isoformat()),
+                "INSERT INTO claims (id, statement, context, added_at, probe_id) VALUES (?,?,?,?,?)",
+                (claim.id, claim.statement, claim.context, claim.added_at.isoformat(), claim.probe_id),
             )
             for source in claim.sources:
                 source.claim_id = claim.id
@@ -213,4 +217,5 @@ class VeritasDB:
             added_at=datetime.fromisoformat(row["added_at"]),
             sources=sources,
             depends_on=depends_on,
+            probe_id=row["probe_id"],
         )

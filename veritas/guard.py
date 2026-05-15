@@ -24,6 +24,7 @@ from typing import Optional
 from .db import VeritasDB
 from .engine import calculate_confidence, propagate, find_contradictions
 from .models import Claim
+from .probe import ProbeRegistry, ProbeResult, PROBE_PASS_THRESHOLD, PROBE_FAIL_THRESHOLD
 
 
 # Thresholds — tune these per use case
@@ -44,10 +45,15 @@ class GuardResult:
     is_fragile: bool = False
     is_stale: bool = False
     flags: list[str] = field(default_factory=list)
+    probe_result: Optional[ProbeResult] = None  # None if no probe was fired
 
     @property
     def should_proceed(self) -> bool:
         return self.verdict == "PROCEED"
+
+    @property
+    def probe_fired(self) -> bool:
+        return self.probe_result is not None
 
     def __str__(self) -> str:
         lines = [f"[{self.verdict}] confidence={self.confidence:.2f}  {self.reason}"]
@@ -62,8 +68,9 @@ class GuardResult:
 
 
 class ReasoningGuard:
-    def __init__(self, db: VeritasDB):
+    def __init__(self, db: VeritasDB, registry: Optional[ProbeRegistry] = None):
         self._db = db
+        self._registry = registry or ProbeRegistry.default()
 
     def check(self, claim_text: str) -> GuardResult:
         """
@@ -133,6 +140,37 @@ class ReasoningGuard:
                 f"{len(strong_contras)} well-sourced contradiction(s) in database"
             )
 
+        # --- Runtime probe -------------------------------------------------
+        probe_result: Optional[ProbeResult] = None
+        if claim.probe_id:
+            fired = self._registry.fire(claim.probe_id)
+            if fired is None:
+                # Probe registered in DB but not loaded in this process
+                flags.append(
+                    f"Probe '{claim.probe_id}' not loaded — world-state check skipped"
+                )
+            else:
+                probe_result = fired
+                if fired.confidence >= PROBE_PASS_THRESHOLD:
+                    # Real-world confirmation: can upgrade CAUTION to PROCEED
+                    # (but not HALT — internal evidence too thin regardless)
+                    if verdict == "CAUTION":
+                        verdict = "PROCEED"
+                    flags.append(f"Probe confirmed: {fired.message}")
+                elif fired.confidence < PROBE_FAIL_THRESHOLD:
+                    # Real-world contradiction: downgrade to at least CAUTION
+                    if verdict == "PROCEED":
+                        verdict = "CAUTION"
+                    # Very low probe confidence tips into HALT
+                    if fired.confidence < HALT_CONFIDENCE and verdict != "HALT":
+                        verdict = "HALT"
+                    flags.append(f"Probe failed: {fired.message}")
+                else:
+                    # Uncertain probe result (0.30–0.70): can't confirm, mild downgrade
+                    if verdict == "PROCEED":
+                        verdict = "CAUTION"
+                    flags.append(f"Probe uncertain ({fired.confidence:.2f}): {fired.message}")
+
         # Build reason string
         if verdict == "PROCEED":
             reason = f"Belief is well-supported (confidence {cv.value:.2f})"
@@ -150,6 +188,7 @@ class ReasoningGuard:
             is_fragile=cv.fragility > FRAGILITY_CAUTION,
             is_stale=cv.staleness_penalty > STALENESS_CAUTION,
             flags=flags,
+            probe_result=probe_result,
         )
 
     def check_all(self, claim_texts: list[str]) -> dict[str, GuardResult]:
