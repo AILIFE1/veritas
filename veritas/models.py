@@ -52,6 +52,8 @@ class Source:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     claim_id: Optional[str] = None
     added_at: datetime = field(default_factory=datetime.utcnow)
+    upstream_ids: list[str] = field(default_factory=list)  # upstream sources this draws from
+    is_primary: bool = True                                  # False if derivative (cites other work)
 
     def effective_date(self) -> datetime:
         return self.source_date or self.added_at
@@ -79,7 +81,8 @@ class ConfidenceVector:
     contra_count: int
     fragility: float       # confidence drop if best source removed
     source_diversity: float
-    staleness_penalty: float = 0.0  # how much decay has reduced confidence
+    staleness_penalty: float = 0.0       # how much decay has reduced confidence
+    upstream_graph_applied: bool = False  # True when independence was reduced for shared upstreams
 
     def __str__(self) -> str:
         bar_len = 20

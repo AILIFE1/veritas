@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -33,7 +34,9 @@ CREATE TABLE IF NOT EXISTS sources (
     independence REAL NOT NULL,
     notes        TEXT,
     source_date  TEXT,
-    added_at     TEXT NOT NULL
+    added_at     TEXT NOT NULL,
+    upstream_ids TEXT NOT NULL DEFAULT '[]',
+    is_primary   INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS provenance (
@@ -60,6 +63,10 @@ class VeritasDB:
         source_cols = {r[1] for r in conn.execute("PRAGMA table_info(sources)").fetchall()}
         if "source_date" not in source_cols:
             conn.execute("ALTER TABLE sources ADD COLUMN source_date TEXT")
+        if "upstream_ids" not in source_cols:
+            conn.execute("ALTER TABLE sources ADD COLUMN upstream_ids TEXT NOT NULL DEFAULT '[]'")
+        if "is_primary" not in source_cols:
+            conn.execute("ALTER TABLE sources ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 1")
         claim_cols = {r[1] for r in conn.execute("PRAGMA table_info(claims)").fetchall()}
         if "probe_id" not in claim_cols:
             conn.execute("ALTER TABLE claims ADD COLUMN probe_id TEXT")
@@ -89,14 +96,17 @@ class VeritasDB:
     def _insert_source(self, conn, source: Source):
         conn.execute(
             "INSERT INTO sources "
-            "(id, claim_id, citation, weight, stance, source_type, independence, notes, source_date, added_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "(id, claim_id, citation, weight, stance, source_type, independence, notes, "
+            "source_date, added_at, upstream_ids, is_primary) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 source.id, source.claim_id, source.citation, source.weight,
                 source.stance.value, source.source_type.value, source.independence,
                 source.notes,
                 source.source_date.isoformat() if source.source_date else None,
                 source.added_at.isoformat(),
+                json.dumps(source.upstream_ids),
+                int(source.is_primary),
             ),
         )
 
@@ -197,6 +207,8 @@ class VeritasDB:
                 notes=s["notes"],
                 source_date=datetime.fromisoformat(s["source_date"]) if s["source_date"] else None,
                 added_at=datetime.fromisoformat(s["added_at"]),
+                upstream_ids=json.loads(s["upstream_ids"]) if s["upstream_ids"] else [],
+                is_primary=bool(s["is_primary"]),
             )
             for s in source_rows
         ]

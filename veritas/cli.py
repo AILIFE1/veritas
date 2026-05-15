@@ -54,8 +54,13 @@ def cli(ctx, db):
 @click.option("--date", "-d", default=None, metavar="YYYY-MM-DD",
               help="Publication date of the source (for decay tracking)")
 @click.option("--context", "-c", default=None, help="Domain tag (e.g. physics, medicine)")
+@click.option("--upstream", "-u", multiple=True, metavar="ID",
+              help="Upstream source ID this draws from (repeat for multiple; prevents citation laundering)")
+@click.option("--derivative", is_flag=True, default=False,
+              help="Mark source as derivative (cites other work, not original data)")
 @click.pass_context
-def add(ctx, statement, source, weight, stance, source_type, independence, date, context):
+def add(ctx, statement, source, weight, stance, source_type, independence, date, context,
+        upstream, derivative):
     """Add a claim, optionally with sources."""
     db = _db(ctx)
     source_date = _parse_date(date)
@@ -67,6 +72,8 @@ def add(ctx, statement, source, weight, stance, source_type, independence, date,
             source_type=SourceType(source_type),
             independence=independence,
             source_date=source_date,
+            upstream_ids=list(upstream),
+            is_primary=not derivative,
         )
         for s in source
     ]
@@ -90,8 +97,13 @@ def add(ctx, statement, source, weight, stance, source_type, independence, date,
 @click.option("--date", "-d", default=None, metavar="YYYY-MM-DD",
               help="Publication date of the source")
 @click.option("--notes", default=None)
+@click.option("--upstream", "-u", multiple=True, metavar="ID",
+              help="Upstream source ID this draws from (repeat for multiple)")
+@click.option("--derivative", is_flag=True, default=False,
+              help="Mark as derivative (cites other work, not original data)")
 @click.pass_context
-def add_source(ctx, claim_ref, citation, weight, stance, source_type, independence, date, notes):
+def add_source(ctx, claim_ref, citation, weight, stance, source_type, independence, date, notes,
+               upstream, derivative):
     """Attach a new source to an existing claim."""
     db = _db(ctx)
     matches = db.search(claim_ref) or ([db.get_claim(claim_ref)] if len(claim_ref) >= 8 else [])
@@ -102,7 +114,8 @@ def add_source(ctx, claim_ref, citation, weight, stance, source_type, independen
     claim = matches[0]
     s = Source(citation=citation, weight=weight, stance=Stance(stance),
                source_type=SourceType(source_type), independence=independence,
-               source_date=_parse_date(date), notes=notes)
+               source_date=_parse_date(date), notes=notes,
+               upstream_ids=list(upstream), is_primary=not derivative)
     db.add_source(claim.id, s)
     updated = db.get_claim(claim.id)
     cv = calculate_confidence(updated.sources)
@@ -147,10 +160,13 @@ def trace(ctx, claim_ref):
             decay_str = ""
             if age > 0.5:
                 decay_str = f"  age:{age:.1f}y  eff:{eff:.2f}"
+            primary_str = "" if s.is_primary else "  [derivative]"
             click.echo(
                 f"    [{icon}] w={s.weight:.2f}  ind={s.independence:.2f}"
-                f"  [{s.source_type.value[:3]}]{decay_str}  {s.citation}"
+                f"  [{s.source_type.value[:3]}]{decay_str}{primary_str}  {s.citation}"
             )
+            if s.upstream_ids:
+                click.echo(f"         upstreams: {', '.join(s.upstream_ids)}")
             if s.notes:
                 click.echo(f"         {s.notes}")
     else:

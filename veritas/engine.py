@@ -1,17 +1,67 @@
 from functools import reduce
 from .models import Claim, Source, Stance, ConfidenceVector, InferenceType
 
+# How strongly shared upstreams reduce effective independence.
+# 1.0 = fully correlated sources contribute nothing beyond the best one.
+# 0.8 = at full upstream overlap, independence is reduced by 80%.
+UPSTREAM_OVERLAP_PENALTY = 0.8
+
+
+def _source_overlap(a: Source, b: Source) -> float:
+    """Jaccard similarity of two sources' upstream ID sets. 0 if either has no upstreams."""
+    if not a.upstream_ids or not b.upstream_ids:
+        return 0.0
+    sa, sb = set(a.upstream_ids), set(b.upstream_ids)
+    return len(sa & sb) / len(sa | sb)
+
+
+def _graph_independences(sources: list[Source]) -> list[float]:
+    """
+    Return effective independence for each source after adjusting for shared upstreams.
+
+    Sources that share upstream IDs draw from the same well. The more upstream
+    overlap between two sources, the less independently each contributes to the
+    noisy-OR pool. This prevents citation laundering: N blog posts all citing
+    the same paper should not compound to near-certainty.
+
+    Adjustment: for each source S, find its maximum Jaccard overlap with any
+    other source. Reduce independence by (overlap * UPSTREAM_OVERLAP_PENALTY).
+    """
+    if not any(s.upstream_ids for s in sources):
+        return [s.independence for s in sources]
+
+    result = []
+    for i, s in enumerate(sources):
+        if not s.upstream_ids:
+            result.append(s.independence)
+            continue
+        max_overlap = max(
+            (_source_overlap(s, other) for j, other in enumerate(sources) if j != i),
+            default=0.0,
+        )
+        adjusted = s.independence * (1.0 - UPSTREAM_OVERLAP_PENALTY * max_overlap)
+        result.append(max(0.0, adjusted))
+    return result
+
 
 def _evidence_mass(sources: list[Source], use_decay: bool = True) -> float:
     """
     Noisy-OR pooling: each independent source reduces remaining uncertainty.
     When use_decay=True, source weights are reduced by temporal decay first.
+    Effective independence is adjusted for shared upstream sources.
     """
     if not sources:
         return 0.0
-    def eff(s: Source) -> float:
-        return (s.effective_weight() if use_decay else s.weight) * s.independence
-    return 1.0 - reduce(lambda acc, s: acc * (1.0 - eff(s)), sources, 1.0)
+    independences = _graph_independences(sources)
+
+    def eff(s: Source, ind: float) -> float:
+        return (s.effective_weight() if use_decay else s.weight) * ind
+
+    return 1.0 - reduce(
+        lambda acc, pair: acc * (1.0 - eff(pair[0], pair[1])),
+        zip(sources, independences),
+        1.0,
+    )
 
 
 def calculate_confidence(sources: list[Source]) -> ConfidenceVector:
@@ -43,6 +93,7 @@ def calculate_confidence(sources: list[Source]) -> ConfidenceVector:
     staleness_penalty = max(0.0, value_raw - value)
     fragility = _fragility(sources, value)
     diversity = _source_diversity(supporting)
+    graph_applied = any(s.upstream_ids for s in sources)
 
     return ConfidenceVector(
         value=round(value, 4),
@@ -52,6 +103,7 @@ def calculate_confidence(sources: list[Source]) -> ConfidenceVector:
         fragility=round(fragility, 4),
         source_diversity=round(diversity, 4),
         staleness_penalty=round(staleness_penalty, 4),
+        upstream_graph_applied=graph_applied,
     )
 
 
