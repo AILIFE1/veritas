@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "veritas-epistemic"
-version = "0.1.0"
+version = "0.1.1"
 description = "Epistemic confidence engine — every AI belief carries its provenance"
 readme = "README.md"
 license = { file = "LICENSE" }

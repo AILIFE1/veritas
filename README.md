@@ -199,6 +199,19 @@ Verdicts: `PROCEED` · `CAUTION` · `HALT`
 
 Triggers: low confidence · single source · high fragility · staleness · contradictions
 
+#### Threshold reference
+
+| Condition | Default threshold | Verdict effect |
+|---|---|---|
+| `confidence < 0.30` | HALT_CONFIDENCE | **HALT** — don't act |
+| `confidence < 0.55` | CAUTION_CONFIDENCE | **CAUTION** — flag uncertainty |
+| `source_count == 1` | — | **CAUTION** — always, regardless of confidence |
+| `fragility > 0.25` | FRAGILITY_CAUTION | **CAUTION** — drops badly if best source removed |
+| `staleness_penalty > 0.08` | STALENESS_CAUTION | **CAUTION** — evidence aging has cost confidence |
+| contradiction `confidence >= 0.45` | CONTRA_HALT_CONF | **CAUTION** — well-sourced counter-claim exists |
+
+All thresholds are constants at the top of `veritas/guard.py` — tune them per use case.
+
 ---
 
 ### Epistemic fingerprint
